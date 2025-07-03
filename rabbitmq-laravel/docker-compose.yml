@@ -47,6 +47,35 @@ services:
                 - '-p${DB_PASSWORD}'
             retries: 3
             timeout: 5s
+    elasticsearch:
+        image: docker.elastic.co/elasticsearch/elasticsearch:7.17.20
+        environment:
+            discovery.type: single-node
+            ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+        ports:
+            - "9200:9200"
+        networks:
+            - sail
+        healthcheck:
+            test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health || exit 1"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+        depends_on:
+            - mysql
+            - laravel.test
+    kibana:
+        image: docker.elastic.co/kibana/kibana:7.17.20
+        ports:
+            - "5601:5601"
+        environment:
+            ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+        networks:
+            - sail
+        depends_on:
+            - mysql
+            - laravel.test
+            - elasticsearch
 networks:
     sail:
         driver: bridge
