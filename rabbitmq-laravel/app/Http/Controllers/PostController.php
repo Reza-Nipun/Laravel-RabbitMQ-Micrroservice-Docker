@@ -5,10 +5,20 @@ namespace App\Http\Controllers;
 use App\Jobs\PostCreate;
 use App\Jobs\PostDelete;
 use App\Models\Post;
+use Elastic\Elasticsearch\ClientBuilder;
 use Illuminate\Http\Request;
 
 class PostController extends Controller
 {
+    protected $elasticClient;
+
+    public function __construct()
+    {
+        $this->elasticClient = ClientBuilder::create()
+            ->setHosts(config('services.elasticsearch.hosts'))
+            ->build();
+    }
+
     public function index()
     {
         return Post::all();
@@ -56,5 +66,37 @@ class PostController extends Controller
         $post->delete();
 
         return response()->json('post is deleted', 200);
+    }
+
+    public function search(Request $request)
+    {
+        $query = $request->input('q');
+
+        if (! $query) {
+            return response()->json(['error' => 'Search query is required'], 400);
+        }
+
+        $params = [
+            'index' => 'posts', // ES index name
+            'body' => [
+                'query' => [
+                    'multi_match' => [
+                        'query' => $query,
+                        'fields' => ['title', 'image'], // fields to search in
+                        // 'fuzziness' => 'AUTO', // optional: to allow typo tolerance
+                        'type' => 'phrase', // exact phrase match
+                    ],
+                ],
+            ],
+        ];
+
+        $results = $this->elasticClient->search($params);
+
+        // Extract _source from hits
+        $posts = array_map(function ($hit) {
+            return $hit['_source'];
+        }, $results['hits']['hits']);
+
+        return response()->json($posts);
     }
 }
